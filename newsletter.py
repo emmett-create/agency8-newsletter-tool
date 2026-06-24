@@ -56,7 +56,7 @@ def get_gspread():
 def compute_numbers(client, year, month, token, gc):
     """All the data for one client/month — shared by the CLI and the web app."""
     outreach = count_outreach(gc, client, year, month)
-    gifts = count_gifts(gc, client, year, month)
+    gifts, top_giftees = gift_data(gc, client, year, month)
     camp = find_monthly_ugc_campaign(client["archive_workspace"], token, year, month)
     if camp:
         stats = campaign_stats(client["archive_workspace"], token, camp["id"], config.TOP_POSTS)
@@ -65,7 +65,7 @@ def compute_numbers(client, year, month, token, gc):
         stats = {"ugc_count": 0, "emv": 0, "top_posts": []}
         campaign_name = None
     return {"month": month, "outreach": outreach, "gifts": gifts,
-            "campaign_name": campaign_name, **stats}
+            "top_giftees": top_giftees, "campaign_name": campaign_name, **stats}
 
 
 # ── dates ───────────────────────────────────────────────────────────────────────
@@ -218,17 +218,45 @@ def count_outreach(gc, client, year, month):
                if (d := parse_date(v)) and d.year == year and d.month == month)
 
 
-def count_gifts(gc, client, year, month):
+def _to_int(s):
+    digits = re.sub(r"[^0-9]", "", str(s))
+    return int(digits) if digits else 0
+
+
+def _is_gift_tab(title, extras):
+    t = title.lower()
+    return ("gift application" in t and "helper" not in t) or title in extras
+
+
+def gift_data(gc, client, year, month):
+    """Returns (gift_count, top_3_giftee_handles) for the month.
+    Counts rows by date in column A; top giftees = highest Follower Count.
+    Gift tabs = any tab named '... Gift Application ...' plus client's extra_gift_tabs."""
     sh = gc.open_by_key(client["giftapp_sheet_key"])
-    prefix = client["giftapp_tab_prefix"]
-    total = 0
+    extras = client.get("extra_gift_tabs", [])
+    count = 0
+    giftees = {}  # handle -> max followers seen
     for ws in sh.worksheets():
-        if not ws.title.startswith(prefix):
+        if not _is_gift_tab(ws.title, extras):
             continue
-        col = ws.col_values(1)[1:]  # column A, skip header
-        total += sum(1 for v in col
-                     if (d := parse_date(v)) and d.year == year and d.month == month)
-    return total
+        rows = ws.get_all_values()
+        if not rows:
+            continue
+        header = rows[0]
+        h_idx = next((i for i, h in enumerate(header) if "ig handle" in h.lower()), None)
+        f_idx = next((i for i, h in enumerate(header) if "follower" in h.lower()), None)
+        for r in rows[1:]:
+            d = parse_date(r[0]) if r else None
+            if not (d and d.year == year and d.month == month):
+                continue
+            count += 1
+            if h_idx is not None and h_idx < len(r):
+                handle = r[h_idx].strip().lstrip("@")
+                if handle:
+                    fol = _to_int(r[f_idx]) if (f_idx is not None and f_idx < len(r)) else 0
+                    giftees[handle] = max(giftees.get(handle, 0), fol)
+    top = [h for h, _ in sorted(giftees.items(), key=lambda kv: kv[1], reverse=True)[:3]]
+    return count, top
 
 
 # ── draft copy ────────────────────────────────────────────────────────────────────
@@ -278,6 +306,10 @@ def generate_narrative(client_name, month_name, nums, key):
 
 def build_draft(client_name, month_name, year, nums, key=None):
     narrative = generate_narrative(client_name, month_name, nums, key)
+    top_posts = nums.get("top_posts", [])
+    top_ugc = f"@{top_posts[0]['handle']} — {top_posts[0]['url']}" if top_posts else "[fill in]"
+    giftees = nums.get("top_giftees", [])
+    giftees_str = ", ".join("@" + h for h in giftees) if giftees else "[fill in]"
     lines = []
     if narrative:
         lines.append(narrative)
@@ -294,14 +326,8 @@ def build_draft(client_name, month_name, year, nums, key=None):
     lines.append(f"  • {month_name} UGC: {nums['ugc_count']}")
     lines.append(f"  • {month_name} EMV: ${nums['emv']:,.0f}")
     lines.append("")
-    lines.append("Top performing content:")
-    for p in nums["top_posts"]:
-        lines.append(f"  • @{p['handle']} — ${p['emv']:,.0f} — {p['url']}")
-    lines.append("")
-    lines.append("Top UGC of the week: [EDIT: pick the standout 'vibes' content]")
-    lines.append("Top Giftees of the week: [EDIT: fill in]")
-    lines.append("")
-    lines.append("[EDIT: optional — anything to highlight this week?]")
+    lines.append(f"Top UGC of the week: {top_ugc}")
+    lines.append(f"Top Giftees of the week: {giftees_str}")
     lines.append("")
     lines.append("As always, let us know if you have any questions!")
     return "\n".join(lines)

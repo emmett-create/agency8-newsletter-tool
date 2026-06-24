@@ -79,6 +79,11 @@ def generate(req: GenerateRequest):
     narrative = nl.generate_narrative(client["display_name"], calendar.month_name[month],
                                       nums, nl._env("ANTHROPIC_API_KEY"))
 
+    top_posts = nums["top_posts"]
+    top_ugc_default = (f"@{top_posts[0]['handle']} — {top_posts[0]['url']}"
+                       if top_posts else "")
+    giftees_default = ", ".join("@" + h for h in nums.get("top_giftees", []))
+
     return {
         "client": client["display_name"],
         "month_name": calendar.month_name[month],
@@ -88,8 +93,9 @@ def generate(req: GenerateRequest):
         "gifts": nums["gifts"],
         "ugc_count": nums["ugc_count"],
         "emv": round(nums["emv"]),
-        "top_posts": nums["top_posts"],
         "narrative": narrative or "",
+        "top_ugc_default": top_ugc_default,
+        "top_giftees_default": giftees_default,
     }
 
 

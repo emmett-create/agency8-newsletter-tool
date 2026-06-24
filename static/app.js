@@ -82,6 +82,8 @@ async function generate() {
 
 function populate(d) {
   $("narrative").value = d.narrative;
+  $("top-ugc").value = d.top_ugc_default || "";
+  $("giftees").value = d.top_giftees_default || "";
   $("metrics").innerHTML = [
     ["Organic Outreach", d.outreach.toLocaleString()],
     ["Gifts Confirmed", d.gifts.toLocaleString()],
@@ -110,11 +112,6 @@ function render() {
   L.push(`• ${d.month_name} UGC: ${d.ugc_count.toLocaleString()}`);
   L.push(`• ${d.month_name} EMV: $${d.emv.toLocaleString()}`);
   L.push("");
-  if (d.top_posts.length) {
-    L.push("Top performing content:");
-    d.top_posts.forEach(p => L.push(`• @${p.handle} — $${Math.round(p.emv).toLocaleString()} — ${p.url}`));
-    L.push("");
-  }
   const ugc = $("top-ugc").value.trim();
   const gift = $("giftees").value.trim();
   L.push(`Top UGC of the week: ${ugc || "[fill in]"}`);

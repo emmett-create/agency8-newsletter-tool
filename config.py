@@ -29,6 +29,8 @@ CLIENTS = {
         "outreach_header": "Outreach Date",   # found by name, not column letter
         # Spreadsheet that holds the gift applications (may be the same or separate)
         "giftapp_sheet_key": "1bSv7ISY0mRoiD8Gjf0o8CHrngIiY6RlLy1ChEzgZ9UI",
-        "giftapp_tab_prefix": "Snif Gift Application",  # tabs starting with this count
+        # Gift tabs are auto-detected by "Gift Application" in the tab name.
+        # List here any gift tabs that DON'T contain that phrase:
+        "extra_gift_tabs": ["Only Sunshine Bundle"],
     },
 }

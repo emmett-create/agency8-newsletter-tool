@@ -93,9 +93,6 @@ def generate(req: GenerateRequest):
     }
 
 
-@app.get("/")
-def index():
-    return FileResponse(os.path.join(STATIC, "index.html"))
-
-
-app.mount("/", StaticFiles(directory=STATIC), name="static")
+# Serve the frontend. html=True makes "/" return index.html.
+# Mounted last so the /api/* routes above always take precedence.
+app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

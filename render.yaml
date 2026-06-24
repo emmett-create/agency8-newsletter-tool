@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: agency8-newsletter-tool
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # All set manually in the Render dashboard (they're secrets):
+      - key: ARCHIVE_APP_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
+      - key: APP_PASSWORD       # optional shared password to gate access
+        sync: false

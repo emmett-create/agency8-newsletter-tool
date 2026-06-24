@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*_newsletter.txt
+.env
+.env.shared
+google-credentials.json
+.DS_Store

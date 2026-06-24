@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agency 8 — Newsletter Tool</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <span class="logo">Agency 8</span>
+      <span class="logo-sub">Newsletter Tool</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Controls -->
+    <div class="controls">
+      <div class="fld">
+        <label>Client</label>
+        <select id="client"></select>
+      </div>
+      <div class="fld">
+        <label>Month</label>
+        <select id="month"><option value="">Select a client first…</option></select>
+      </div>
+      <div class="fld" id="pw-fld" style="display:none">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="team password">
+      </div>
+      <button id="generate" class="btn-pri">Generate newsletter</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <!-- Editor + preview -->
+    <div id="workspace" class="workspace hidden">
+      <div class="editor">
+        <h3>Edit</h3>
+
+        <label>Intro <span class="hint">(auto-written — tweak as needed)</span></label>
+        <textarea id="narrative" rows="5"></textarea>
+
+        <div class="metrics" id="metrics"></div>
+
+        <label>Top UGC of the week <span class="hint">(your "vibes" pick)</span></label>
+        <input type="text" id="top-ugc" placeholder="e.g. @creator — link / note">
+
+        <label>Top Giftees of the week</label>
+        <input type="text" id="giftees" placeholder="e.g. Flowgogirl, Marvella">
+
+        <label>Highlights <span class="hint">(optional)</span></label>
+        <textarea id="highlights" rows="2" placeholder="Anything to call out this week?"></textarea>
+      </div>
+
+      <div class="preview-wrap">
+        <div class="preview-hdr">
+          <h3>Preview</h3>
+          <button id="copy" class="btn-pri btn-sm">Copy newsletter</button>
+        </div>
+        <pre id="preview" class="preview"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

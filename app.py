@@ -81,23 +81,20 @@ def generate(req: GenerateRequest):
     narrative = nl.generate_narrative(client["display_name"], calendar.month_name[month],
                                       nums, nl._env("ANTHROPIC_API_KEY"))
 
-    top_posts = nums["top_posts"]
-    top_ugc_default = (f"@{top_posts[0]['handle']} — {top_posts[0]['url']}"
-                       if top_posts else "")
-    giftees_default = ", ".join("@" + h for h in nums.get("top_giftees", []))
-
+    cid = nums.get("campaign_id")
     return {
         "client": client["display_name"],
         "month_name": calendar.month_name[month],
         "year": year,
         "campaign_name": nums["campaign_name"],
+        "campaign_url": f"https://app.archive.com/crm/p/c/{cid}" if cid else "",
         "outreach": nums["outreach"],
         "gifts": nums["gifts"],
         "ugc_count": nums["ugc_count"],
         "emv": round(nums["emv"]),
         "narrative": narrative or "",
-        "top_ugc_default": top_ugc_default,
-        "top_giftees_default": giftees_default,
+        "top_ugc": nums["top_posts"][:3],          # [{handle, emv, url}]
+        "top_giftees": nums.get("top_giftees", []),  # [handle, ...]
     }
 
 

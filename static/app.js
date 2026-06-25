@@ -82,8 +82,6 @@ async function generate() {
 
 function populate(d) {
   $("narrative").value = d.narrative;
-  $("top-ugc").value = d.top_ugc_default || "";
-  $("giftees").value = d.top_giftees_default || "";
   $("metrics").innerHTML = [
     ["Organic Outreach", d.outreach.toLocaleString()],
     ["Gifts Confirmed", d.gifts.toLocaleString()],
@@ -97,38 +95,60 @@ function populate(d) {
 }
 
 // Re-render the preview whenever an editable field changes
-["narrative", "top-ugc", "giftees", "highlights"].forEach(id =>
+["narrative", "highlights"].forEach(id =>
   document.addEventListener("input", e => { if (e.target.id === id) render(); }));
+
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const nl2br = (s) => esc(s).replace(/\n/g, "<br>");
+
+// Build the newsletter as HTML (with real hyperlinks) — used for both the preview and copy.
+function buildHtml() {
+  const d = current;
+  const head = d.campaign_url
+    ? `<a href="${d.campaign_url}">${d.month_name} UGC</a>`
+    : `${d.month_name} UGC`;
+  let h = `<p>${nl2br($("narrative").value.trim())}</p>`;
+  h += `<p><b>${head}</b></p><ul>`;
+  h += `<li>Organic Outreach: ${d.outreach.toLocaleString()}</li>`;
+  h += `<li>Gifts Confirmed: ${d.gifts.toLocaleString()}</li>`;
+  h += `<li>${d.month_name} UGC: ${d.ugc_count.toLocaleString()}</li>`;
+  h += `<li>${d.month_name} EMV: $${d.emv.toLocaleString()}</li>`;
+  if (d.top_ugc && d.top_ugc.length) {
+    h += `<li>Top UGC of the week:<ul>`;
+    d.top_ugc.forEach(p => h += `<li><a href="${esc(p.url)}">@${esc(p.handle)}</a></li>`);
+    h += `</ul></li>`;
+  }
+  if (d.top_giftees && d.top_giftees.length) {
+    h += `<li>Top Giftees of the week:<ul>`;
+    d.top_giftees.forEach(g => h += `<li><a href="https://www.instagram.com/${esc(g)}/">@${esc(g)}</a></li>`);
+    h += `</ul></li>`;
+  }
+  h += `</ul>`;
+  const hi = $("highlights").value.trim();
+  if (hi) h += `<p>${nl2br(hi)}</p>`;
+  h += `<p>As always, let us know if you have any questions!</p>`;
+  return h;
+}
 
 function render() {
   if (!current) return;
-  const d = current;
-  const L = [];
-  L.push($("narrative").value.trim());
-  L.push("");
-  L.push(`${d.month_name} UGC:`);
-  L.push(`• Organic Outreach: ${d.outreach.toLocaleString()}`);
-  L.push(`• Gifts Confirmed: ${d.gifts.toLocaleString()}`);
-  L.push(`• ${d.month_name} UGC: ${d.ugc_count.toLocaleString()}`);
-  L.push(`• ${d.month_name} EMV: $${d.emv.toLocaleString()}`);
-  L.push("");
-  const ugc = $("top-ugc").value.trim();
-  const gift = $("giftees").value.trim();
-  L.push(`Top UGC of the week: ${ugc || "[fill in]"}`);
-  L.push(`Top Giftees of the week: ${gift || "[fill in]"}`);
-  const hi = $("highlights").value.trim();
-  if (hi) { L.push(""); L.push(hi); }
-  L.push("");
-  L.push("As always, let us know if you have any questions!");
-  $("preview").textContent = L.join("\n");
+  $("preview").innerHTML = buildHtml();
 }
 
-$("copy").addEventListener("click", () => {
-  navigator.clipboard.writeText($("preview").textContent).then(() => {
-    const b = $("copy"); const t = b.textContent;
-    b.textContent = "Copied ✓";
-    setTimeout(() => b.textContent = t, 1500);
-  });
+$("copy").addEventListener("click", async () => {
+  const b = $("copy"), label = b.textContent;
+  const html = buildHtml();
+  const plain = $("preview").innerText;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([plain], { type: "text/plain" }),
+    })]);
+  } catch (e) {
+    await navigator.clipboard.writeText(plain);  // fallback: plain text
+  }
+  b.textContent = "Copied ✓";
+  setTimeout(() => (b.textContent = label), 1500);
 });
 
 function setStatus(msg, isError) {

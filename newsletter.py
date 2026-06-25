@@ -64,12 +64,13 @@ def compute_numbers(client, year, month, token, gc):
     camp = find_monthly_ugc_campaign(ws_id, token, year, month) if ws_id else None
     if camp:
         stats = campaign_stats(ws_id, token, camp["id"], config.TOP_POSTS)
-        campaign_name = camp["name"]
+        campaign_name, campaign_id = camp["name"], camp["id"]
     else:
         stats = {"ugc_count": 0, "emv": 0, "top_posts": []}
-        campaign_name = None
+        campaign_name = campaign_id = None
     return {"month": month, "outreach": outreach, "gifts": gifts,
-            "top_giftees": top_giftees, "campaign_name": campaign_name, **stats}
+            "top_giftees": top_giftees, "campaign_name": campaign_name,
+            "campaign_id": campaign_id, **stats}
 
 
 # ── dates ───────────────────────────────────────────────────────────────────────

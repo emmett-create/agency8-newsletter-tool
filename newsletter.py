@@ -14,7 +14,7 @@ import re
 import sys
 import json
 import calendar
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 import gspread
@@ -55,11 +55,15 @@ def get_gspread():
 
 def compute_numbers(client, year, month, token, gc):
     """All the data for one client/month — shared by the CLI and the web app."""
-    outreach = count_outreach(gc, client, year, month)
-    gifts, top_giftees = gift_data(gc, client, year, month)
-    camp = find_monthly_ugc_campaign(client["archive_workspace"], token, year, month)
+    sh = gc.open_by_key(client["report_sheet_key"])
+    forms = reporting_formulas(sh)
+    outreach = count_outreach(sh, forms.get("outreach"), year, month, client)
+    gifts, top_giftees = gift_data(gc, client, sh, forms.get("form responses"), year, month)
+
+    ws_id = client.get("archive_workspace")
+    camp = find_monthly_ugc_campaign(ws_id, token, year, month) if ws_id else None
     if camp:
-        stats = campaign_stats(client["archive_workspace"], token, camp["id"], config.TOP_POSTS)
+        stats = campaign_stats(ws_id, token, camp["id"], config.TOP_POSTS)
         campaign_name = camp["name"]
     else:
         stats = {"ugc_count": 0, "emv": 0, "top_posts": []}
@@ -80,6 +84,19 @@ def parse_date(s):
         except ValueError:
             pass
     return None
+
+
+_SHEETS_EPOCH = datetime(1899, 12, 30)  # Google Sheets day 0
+
+
+def to_date(v):
+    """Convert a cell to a date. Handles Sheets serial numbers (real dates, any display
+    format) and text dates. Returns None for non-dates."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return _SHEETS_EPOCH + timedelta(days=float(v)) if 20000 < v < 80000 else None
+    return parse_date(v)
 
 
 def month_bounds(year, month):
@@ -181,7 +198,7 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
       }
     }"""
     total = 0
-    emv_cents = 0
+    emv_total = 0  # earnedMediaValue is already in dollars (verified vs Archive UI)
     top = []
     after = None
     while True:
@@ -189,33 +206,42 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
                               workspace_id, token)["items"]
         total = items["totalCount"]
         for n in items["nodes"]:
-            emv_cents += int(n["currentEngagement"]["earnedMediaValue"] or 0)
+            emv_total += int(n["currentEngagement"]["earnedMediaValue"] or 0)
         if not top:  # first page is already sorted EMV-desc → holds the top posts
             for n in items["nodes"][:top_n]:
                 top.append({
                     "handle": (n.get("socialProfile") or {}).get("accountName", "?"),
-                    "emv": int(n["currentEngagement"]["earnedMediaValue"] or 0) / 100,
+                    "emv": int(n["currentEngagement"]["earnedMediaValue"] or 0),
                     "url": n.get("archivePublicUrl") or n.get("originalUrl") or "",
                 })
         if items["pageInfo"]["hasNextPage"]:
             after = items["pageInfo"]["endCursor"]
         else:
             break
-    return {"ugc_count": total, "emv": emv_cents / 100, "top_posts": top}
+    return {"ugc_count": total, "emv": emv_total, "top_posts": top}
 
 
-# ── Google Sheets ─────────────────────────────────────────────────────────────────
-def count_outreach(gc, client, year, month):
-    sh = gc.open_by_key(client["report_sheet_key"])
-    ws = sh.worksheet(client["master_list_tab"])
-    header = ws.row_values(1)
-    idx = next((i for i, h in enumerate(header)
-                if h.strip().lower() == client["outreach_header"].lower()), None)
-    if idx is None:
-        raise SystemExit(f"'{client['outreach_header']}' column not found in Master List")
-    col = ws.col_values(idx + 1)[1:]  # skip header
-    return sum(1 for v in col
-               if (d := parse_date(v)) and d.year == year and d.month == month)
+# ── Google Sheets (formula-driven) ──────────────────────────────────────────────
+# Each client's "Reporting" tab defines the source of truth: the Outreach box and the
+# Form Responses box hold COUNTIFS formulas naming exactly which tabs+columns to count.
+_REF_RE = re.compile(r"(?:'([^']+)'!|(?<![\w'])([A-Za-z0-9_]+)!)\$?([A-Z]{1,3})\$?:\$?[A-Z]{1,3}")
+
+
+def _parse_refs(formula):
+    """Distinct (tab, column-letter) pairs referenced by a COUNTIFS-sum formula."""
+    refs = []
+    for m in _REF_RE.finditer(formula or ""):
+        pair = (m.group(1) or m.group(2), m.group(3))
+        if pair not in refs:
+            refs.append(pair)
+    return refs
+
+
+def _col_idx(col):
+    n = 0
+    for ch in col.upper():
+        n = n * 26 + (ord(ch) - 64)
+    return n - 1
 
 
 def _to_int(s):
@@ -223,40 +249,95 @@ def _to_int(s):
     return int(digits) if digits else 0
 
 
-def _is_gift_tab(title, extras):
-    t = title.lower()
-    return ("gift application" in t and "helper" not in t) or title in extras
+def reporting_formulas(sh):
+    """{lowercased label: formula} from the Reporting tab (col F = label, col G = formula)."""
+    rep = next((w for w in sh.worksheets() if "reporting" in w.title.lower()), None)
+    if not rep:
+        return {}
+    out = {}
+    for row in rep.get("F1:G40", value_render_option="FORMULA"):
+        if len(row) >= 2 and str(row[0]).strip():
+            out[str(row[0]).strip().lower()] = row[1]
+    return out
 
 
-def gift_data(gc, client, year, month):
-    """Returns (gift_count, top_3_giftee_handles) for the month.
-    Counts rows by date in column A; top giftees = highest Follower Count.
-    Gift tabs = any tab named '... Gift Application ...' plus client's extra_gift_tabs."""
-    sh = gc.open_by_key(client["giftapp_sheet_key"])
-    extras = client.get("extra_gift_tabs", [])
-    count = 0
-    giftees = {}  # handle -> max followers seen
-    for ws in sh.worksheets():
-        if not _is_gift_tab(ws.title, extras):
+def count_outreach(sh, formula, year, month, client=None):
+    """Sum outreach across the tabs/columns named in the 'Outreach' formula."""
+    refs = _parse_refs(formula)
+    if not refs and client and client.get("outreach_header"):
+        # Legacy fallback (e.g. Snif): find the column by header name.
+        ws = sh.worksheet(client["master_list_tab"])
+        header = ws.row_values(1)
+        idx = next((i for i, h in enumerate(header)
+                    if h.strip().lower() == client["outreach_header"].lower()), None)
+        refs = [(client["master_list_tab"], chr(65 + idx))] if idx is not None and idx < 26 else []
+    titles = {w.title: w for w in sh.worksheets()}
+    total = 0
+    for tab, col in refs:
+        ws = titles.get(tab)
+        if not ws:
+            continue  # referenced tab not in this spreadsheet — skip
+        values = ws.col_values(_col_idx(col) + 1, value_render_option="UNFORMATTED_VALUE")[1:]
+        total += sum(1 for v in values
+                     if (d := to_date(v)) and d.year == year and d.month == month)
+    return total
+
+
+def _collect_gifts(ws, date_idx, year, month, counter, giftees):
+    rows = ws.get_values(value_render_option="UNFORMATTED_VALUE")
+    if not rows:
+        return
+    header = [str(h) for h in rows[0]]
+    h_idx = next((i for i, h in enumerate(header) if "ig handle" in h.lower()), None)
+    f_idx = next((i for i, h in enumerate(header) if "follower" in h.lower()), None)
+    for r in rows[1:]:
+        if date_idx >= len(r):
             continue
-        rows = ws.get_all_values()
-        if not rows:
+        d = to_date(r[date_idx])
+        if not (d and d.year == year and d.month == month):
             continue
-        header = rows[0]
-        h_idx = next((i for i, h in enumerate(header) if "ig handle" in h.lower()), None)
-        f_idx = next((i for i, h in enumerate(header) if "follower" in h.lower()), None)
-        for r in rows[1:]:
-            d = parse_date(r[0]) if r else None
-            if not (d and d.year == year and d.month == month):
-                continue
-            count += 1
-            if h_idx is not None and h_idx < len(r):
-                handle = r[h_idx].strip().lstrip("@")
-                if handle:
-                    fol = _to_int(r[f_idx]) if (f_idx is not None and f_idx < len(r)) else 0
-                    giftees[handle] = max(giftees.get(handle, 0), fol)
+        counter[0] += 1
+        if h_idx is not None and h_idx < len(r):
+            handle = str(r[h_idx]).strip().lstrip("@")
+            if handle:
+                fol = _to_int(r[f_idx]) if (f_idx is not None and f_idx < len(r)) else 0
+                giftees[handle] = max(giftees.get(handle, 0), fol)
+
+
+def gift_data(gc, client, sh, formula, year, month):
+    """(gift_count, top_3_giftee_handles). Gift tabs come from the 'Form Responses' formula,
+    unless the client's gifts live in a separate spreadsheet (giftapp_sheet_key)."""
+    counter = [0]
+    giftees = {}
+    if client.get("giftapp_sheet_key"):
+        # Separate spreadsheet (e.g. Snif): match tabs by name, date always in column A.
+        gsh = gc.open_by_key(client["giftapp_sheet_key"])
+        extras = client.get("extra_gift_tabs", [])
+        for ws in gsh.worksheets():
+            t = ws.title.lower()
+            if ("gift application" in t and "helper" not in t) or ws.title in extras:
+                _collect_gifts(ws, 0, year, month, counter, giftees)
+    else:
+        titles = {w.title: w for w in sh.worksheets()}
+        for tab, col in _parse_refs(formula):
+            ws = titles.get(tab)
+            if ws:
+                _collect_gifts(ws, _col_idx(col), year, month, counter, giftees)
     top = [h for h, _ in sorted(giftees.items(), key=lambda kv: kv[1], reverse=True)[:3]]
-    return count, top
+    return counter[0], top
+
+
+def recent_months(n=12):
+    """Fallback month list for clients with no Archive workspace (no UGC campaigns)."""
+    now = datetime.utcnow()
+    y, m, out = now.year, now.month, []
+    for _ in range(n):
+        out.append({"value": f"{y:04d}-{m:02d}",
+                    "label": f"{calendar.month_name[m]} {y}", "campaign": None})
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return out
 
 
 # ── draft copy ────────────────────────────────────────────────────────────────────

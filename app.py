@@ -56,8 +56,10 @@ def months(req: ClientRequest):
     check_auth(req.password)
     if req.client not in config.CLIENTS:
         raise HTTPException(status_code=404, detail="Unknown client.")
-    token = nl.archive_token()
-    return {"months": nl.ugc_campaign_months(config.CLIENTS[req.client]["archive_workspace"], token)}
+    ws_id = config.CLIENTS[req.client].get("archive_workspace")
+    if not ws_id:
+        return {"months": nl.recent_months(12)}   # no Archive → offer recent months
+    return {"months": nl.ugc_campaign_months(ws_id, nl.archive_token())}
 
 
 @app.post("/api/generate")

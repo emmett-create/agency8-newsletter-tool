@@ -191,9 +191,7 @@ document.addEventListener("change", e => {
 // ── Build HTML (preview + copy) ───────────────────────────────────────────────
 function buildHtml() {
   const d = current;
-  const head = d.campaign_url
-    ? `<a href="${d.campaign_url}">${d.month_name} UGC</a>`
-    : `${d.month_name} UGC`;
+  const head = d.month_name + " UGC";  // campaign link removed (CRM URL requires login)
   const show = id => { const c = document.querySelector(`.m-toggle[value="${id}"]`); return !c || c.checked; };
 
   let h = `<p>${nl2br($("narrative").value.trim())}</p>`;

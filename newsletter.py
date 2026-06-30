@@ -358,7 +358,8 @@ Open with a short greeting (e.g. "Hi Team! Popping in with our weekly update." o
 1–2 short sentences on gifting/UGC momentum and, if natural, a light forward-looking note. \
 Rules: Do NOT state any specific statistics or numbers — those are listed separately below your text. \
 Do NOT invent facts, launches, or names. Vary the wording from week to week. \
-Output ONLY the greeting + intro sentences as plain text — no headings, no metrics, no sign-off."""
+Output ONLY the greeting + intro sentences as plain text, no headings, no metrics, no sign-off. \
+Never use em dashes or en dashes (the "—" or "–" characters) anywhere; use commas, periods, or "and" instead."""
 
 
 def generate_narrative(client_name, month_name, nums, key):
@@ -380,7 +381,8 @@ def generate_narrative(client_name, month_name, nums, key):
             timeout=40,
         )
         r.raise_for_status()
-        return r.json()["content"][0]["text"].strip()
+        text = r.json()["content"][0]["text"].strip()
+        return re.sub(r"\s*[—–]\s*", ", ", text)   # safety net: strip any em/en dashes
     except Exception as e:
         print(f"    (auto-draft unavailable, using template: {e})")
         return None

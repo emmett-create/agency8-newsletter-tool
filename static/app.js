@@ -88,15 +88,22 @@ function populate(d) {
     [`${d.month_name} UGC`, d.ugc_count.toLocaleString()],
     [`${d.month_name} EMV`, "$" + d.emv.toLocaleString()],
   ].map(([l, v]) => `<div class="metric"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  // Pre-fill the editable Top UGC / Top Giftees fields with the auto picks
+  $("top-ugc").value = (d.top_ugc || []).map(p => `@${p.handle} - ${p.url}`).join("\n");
+  $("giftees").value = (d.top_giftees || []).map(h => `@${h}`).join(", ");
+  document.querySelectorAll(".m-toggle").forEach(c => (c.checked = true));
   if (!d.campaign_name) {
     setStatus("⚠ No monthly UGC campaign found for this month — UGC/EMV show 0.", true);
   }
   render();
 }
 
-// Re-render the preview whenever an editable field changes
-["narrative", "highlights"].forEach(id =>
+// Re-render the preview whenever an editable field or metric toggle changes
+["narrative", "highlights", "top-ugc", "giftees"].forEach(id =>
   document.addEventListener("input", e => { if (e.target.id === id) render(); }));
+document.addEventListener("change", e => {
+  if (e.target.classList && e.target.classList.contains("m-toggle")) render();
+});
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const nl2br = (s) => esc(s).replace(/\n/g, "<br>");
@@ -107,20 +114,44 @@ function buildHtml() {
   const head = d.campaign_url
     ? `<a href="${d.campaign_url}">${d.month_name} UGC</a>`
     : `${d.month_name} UGC`;
+  const show = id => { const c = document.querySelector(`.m-toggle[value="${id}"]`); return !c || c.checked; };
   let h = `<p>${nl2br($("narrative").value.trim())}</p>`;
   h += `<p><b>${head}</b></p><ul>`;
-  h += `<li>Organic Outreach: ${d.outreach.toLocaleString()}</li>`;
-  h += `<li>Gifts Confirmed: ${d.gifts.toLocaleString()}</li>`;
-  h += `<li>${d.month_name} UGC: ${d.ugc_count.toLocaleString()}</li>`;
-  h += `<li>${d.month_name} EMV: $${d.emv.toLocaleString()}</li>`;
-  if (d.top_ugc && d.top_ugc.length) {
+  if (show("outreach")) h += `<li>Organic Outreach: ${d.outreach.toLocaleString()}</li>`;
+  if (show("gifts"))    h += `<li>Gifts Confirmed: ${d.gifts.toLocaleString()}</li>`;
+  if (show("ugc"))      h += `<li>${d.month_name} UGC: ${d.ugc_count.toLocaleString()}</li>`;
+  if (show("emv"))      h += `<li>${d.month_name} EMV: $${d.emv.toLocaleString()}</li>`;
+
+  // Top UGC — from the editable field. One entry per line; if a line has a URL, link it.
+  const ugcLines = $("top-ugc").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (ugcLines.length) {
     h += `<li>Top UGC of the week:<ul>`;
-    d.top_ugc.forEach(p => h += `<li><a href="${esc(p.url)}">@${esc(p.handle)}</a></li>`);
+    ugcLines.forEach(line => {
+      const m = line.match(/(https?:\/\/\S+)/);
+      if (m) {
+        const label = line.replace(m[1], "").replace(/[\s\-–—|:]+$/, "").trim() || m[1];
+        h += `<li><a href="${esc(m[1])}">${esc(label)}</a></li>`;
+      } else {
+        h += `<li>${esc(line)}</li>`;
+      }
+    });
     h += `</ul></li>`;
   }
-  if (d.top_giftees && d.top_giftees.length) {
+
+  // Top Giftees — from the editable field. Comma-separated; @handle links to Instagram.
+  const giftItems = $("giftees").value.split(",").map(s => s.trim()).filter(Boolean);
+  if (giftItems.length) {
     h += `<li>Top Giftees of the week:<ul>`;
-    d.top_giftees.forEach(g => h += `<li><a href="https://www.instagram.com/${esc(g)}/">@${esc(g)}</a></li>`);
+    giftItems.forEach(g => {
+      const m = g.match(/(https?:\/\/\S+)/);
+      if (m) {
+        const label = g.replace(m[1], "").trim() || g;
+        h += `<li><a href="${esc(m[1])}">${esc(label)}</a></li>`;
+      } else {
+        const handle = g.replace(/^@/, "");
+        h += `<li><a href="https://www.instagram.com/${esc(handle)}/">@${esc(handle)}</a></li>`;
+      }
+    });
     h += `</ul></li>`;
   }
   h += `</ul>`;

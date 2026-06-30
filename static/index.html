@@ -44,7 +44,19 @@
 
         <div class="metrics" id="metrics"></div>
 
-        <p class="hint" style="margin:14px 0 0">Top UGC + Top Giftees are added automatically as clickable links (top 3 each).</p>
+        <label>Metrics to include <span class="hint">(uncheck to hide for this client)</span></label>
+        <div id="metric-toggles" style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin:2px 0 8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="outreach" checked> Organic Outreach</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="gifts" checked> Gifts Confirmed</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="ugc" checked> UGC</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="emv" checked> EMV</label>
+        </div>
+
+        <label>Top UGC of the week <span class="hint">(auto-filled — edit to feature others; keep a link so it stays clickable)</span></label>
+        <textarea id="top-ugc" rows="3"></textarea>
+
+        <label>Top Giftees of the week <span class="hint">(auto-filled by followers — comma-separated handles, editable)</span></label>
+        <input type="text" id="giftees">
 
         <label>Highlights <span class="hint">(optional)</span></label>
         <textarea id="highlights" rows="2" placeholder="Anything to call out this week?"></textarea>

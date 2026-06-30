@@ -66,7 +66,7 @@ def compute_numbers(client, year, month, token, gc):
         stats = campaign_stats(ws_id, token, camp["id"], config.TOP_POSTS)
         campaign_name, campaign_id = camp["name"], camp["id"]
     else:
-        stats = {"ugc_count": 0, "emv": 0, "top_posts": []}
+        stats = {"ugc_count": 0, "emv": 0, "impressions": 0, "followership": 0, "top_posts": []}
         campaign_name = campaign_id = None
     return {"month": month, "outreach": outreach, "gifts": gifts,
             "top_giftees": top_giftees, "campaign_name": campaign_name,
@@ -183,7 +183,7 @@ def ugc_campaign_months(workspace_id, token):
 
 
 def campaign_stats(workspace_id, token, campaign_id, top_n):
-    """Total UGC count, total EMV (dollars), and the top N posts by EMV."""
+    """UGC count, EMV (dollars), impressions, total followership, and the top N posts by EMV."""
     q = """
     query($cid: ID!, $after: String) {
       items(first: 100, after: $after,
@@ -193,13 +193,15 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
         pageInfo { hasNextPage endCursor }
         nodes {
           archivePublicUrl originalUrl
-          socialProfile { accountName }
-          currentEngagement { earnedMediaValue }
+          socialProfile { id accountName followers }
+          currentEngagement { earnedMediaValue impressions }
         }
       }
     }"""
     total = 0
-    emv_total = 0  # earnedMediaValue is already in dollars (verified vs Archive UI)
+    emv_total = 0          # earnedMediaValue is already in dollars (verified vs Archive UI)
+    impressions_total = 0
+    followers_by_profile = {}   # dedupe followers by social profile (a creator's posts share followers)
     top = []
     after = None
     while True:
@@ -207,19 +209,28 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
                               workspace_id, token)["items"]
         total = items["totalCount"]
         for n in items["nodes"]:
-            emv_total += int(n["currentEngagement"]["earnedMediaValue"] or 0)
+            eng = n.get("currentEngagement") or {}
+            emv_total += int(eng.get("earnedMediaValue") or 0)
+            impressions_total += int(eng.get("impressions") or 0)
+            sp = n.get("socialProfile") or {}
+            pid = sp.get("id") or sp.get("accountName")
+            if pid and pid not in followers_by_profile:
+                followers_by_profile[pid] = int(sp.get("followers") or 0)
         if not top:  # first page is already sorted EMV-desc → holds the top posts
             for n in items["nodes"][:top_n]:
                 top.append({
                     "handle": (n.get("socialProfile") or {}).get("accountName", "?"),
-                    "emv": int(n["currentEngagement"]["earnedMediaValue"] or 0),
+                    "emv": int((n.get("currentEngagement") or {}).get("earnedMediaValue") or 0),
                     "url": n.get("archivePublicUrl") or n.get("originalUrl") or "",
                 })
         if items["pageInfo"]["hasNextPage"]:
             after = items["pageInfo"]["endCursor"]
         else:
             break
-    return {"ugc_count": total, "emv": emv_total, "top_posts": top}
+    return {"ugc_count": total, "emv": emv_total,
+            "impressions": impressions_total,
+            "followership": sum(followers_by_profile.values()),
+            "top_posts": top}
 
 
 # ── Google Sheets (formula-driven) ──────────────────────────────────────────────
@@ -324,7 +335,8 @@ def gift_data(gc, client, sh, formula, year, month):
             ws = titles.get(tab)
             if ws:
                 _collect_gifts(ws, _col_idx(col), year, month, counter, giftees)
-    top = [h for h, _ in sorted(giftees.items(), key=lambda kv: kv[1], reverse=True)[:3]]
+    top = [{"handle": h, "followers": f}
+           for h, f in sorted(giftees.items(), key=lambda kv: kv[1], reverse=True)[:10]]
     return counter[0], top
 
 

@@ -9,7 +9,7 @@ Find a client's Archive workspace UUID by running:  python list_workspaces.py
 GOOGLE_CREDENTIALS = "/Users/emmett/agency8-influencer-tool/google-credentials.json"
 
 # How many top-performing posts to include in the newsletter draft
-TOP_POSTS = 5
+TOP_POSTS = 10   # how many top-UGC candidates to offer in the checklist
 
 # Archive GraphQL endpoint
 ARCHIVE_API_URL = "https://app.archive.com/api/v2"

@@ -44,19 +44,24 @@
 
         <div class="metrics" id="metrics"></div>
 
-        <label>Metrics to include <span class="hint">(uncheck to hide for this client)</span></label>
-        <div id="metric-toggles" style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin:2px 0 8px">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="outreach" checked> Organic Outreach</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="gifts" checked> Gifts Confirmed</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="ugc" checked> UGC</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" class="m-toggle" value="emv" checked> EMV</label>
+        <label>Metrics to include <span class="hint">(click to expand — uncheck to hide)</span></label>
+        <div class="metric-dropdown" id="metric-dropdown-wrap">
+          <button type="button" class="metric-dropdown-btn" id="metric-dropdown-btn">▾ All metrics selected</button>
+          <div class="metric-dropdown-menu hidden" id="metric-dropdown-menu">
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="outreach" checked> Organic Outreach</label>
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="gifts" checked> Gifts Confirmed</label>
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="ugc" checked> UGC count</label>
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="emv" checked> EMV</label>
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="impressions"> Impressions</label>
+            <label class="m-opt"><input type="checkbox" class="m-toggle" value="followership"> Total Followership</label>
+          </div>
         </div>
 
-        <label>Top UGC of the week <span class="hint">(auto-filled — edit to feature others; keep a link so it stays clickable)</span></label>
-        <textarea id="top-ugc" rows="3"></textarea>
+        <label>Top UGC of the week <span class="hint">(check up to 3 to feature — click link to preview)</span></label>
+        <div class="pick-list" id="top-ugc-list"></div>
 
-        <label>Top Giftees of the week <span class="hint">(auto-filled by followers — comma-separated handles, editable)</span></label>
-        <input type="text" id="giftees">
+        <label>Top Giftees of the week <span class="hint">(check up to 3 to feature)</span></label>
+        <div class="pick-list" id="giftees-list"></div>
 
         <label>Highlights <span class="hint">(optional)</span></label>
         <textarea id="highlights" rows="2" placeholder="Anything to call out this week?"></textarea>

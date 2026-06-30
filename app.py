@@ -92,9 +92,11 @@ def generate(req: GenerateRequest):
         "gifts": nums["gifts"],
         "ugc_count": nums["ugc_count"],
         "emv": round(nums["emv"]),
+        "impressions": nums.get("impressions", 0),
+        "followership": nums.get("followership", 0),
         "narrative": narrative or "",
-        "top_ugc": nums["top_posts"][:3],          # [{handle, emv, url}]
-        "top_giftees": nums.get("top_giftees", []),  # [handle, ...]
+        "top_ugc": nums["top_posts"],           # up to TOP_POSTS candidates [{handle, emv, url}]
+        "top_giftees": nums.get("top_giftees", []),  # up to 10 candidates [{handle, followers}]
     }
 
 

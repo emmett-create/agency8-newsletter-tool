@@ -58,4 +58,5 @@ CLIENTS = {
     "emmarelief":     {"display_name": "Emma Relief",       "archive_workspace": "e202d8c3-022b-4453-85ca-fc2d591827c0", "report_sheet_key": "1tIs_TonI25q20QEB9perUtIAmgepb4Jd0OY4q3x-EdU"},
     "fur":            {"display_name": "Fur",               "archive_workspace": "1bfb1db8-dbcd-460a-bb81-d44b31b73d92", "report_sheet_key": "1aYKRBpUFy2rZ7vpAmayfA_AnmW9c4tGKECFF-G1Kd6w"},
     "maev":           {"display_name": "Maev",              "archive_workspace": "a676018b-8d07-44b2-a3d4-8afd0008b67b", "report_sheet_key": "1QSsL_AK8vaJsGhbgC1kXDUD0eOFRtAR-HuJJoRRNlQQ"},
+    "momofuku":       {"display_name": "Momofuku",          "archive_workspace": "83937432-fbd5-4932-989a-7ac48d1dc307", "report_sheet_key": "1Kk5ZgKu1RoHrLN0KcSai34RDlI0VmzxtgGKChiDOlv4"},
 }

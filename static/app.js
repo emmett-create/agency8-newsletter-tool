@@ -23,6 +23,32 @@ $("client").addEventListener("change", loadMonths);
 $("password").addEventListener("change", () => { if (authRequired) loadMonths(); });
 $("generate").addEventListener("click", generate);
 
+// ── Top UGC / Giftees period (month vs. custom week) ──────────────────────────
+function fmtDateInput(d) { return d.toISOString().slice(0, 10); }
+
+$("top-period").addEventListener("change", () => {
+  const isWeek = $("top-period").value === "week";
+  $("week-range-fld").classList.toggle("hidden", !isWeek);
+  if (isWeek && !$("week-start").value) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    $("week-start").value = fmtDateInput(start);
+    $("week-end").value = fmtDateInput(end);
+  }
+});
+
+// Derives the "month" / "week (Jul 14 – Jul 20)" label from the data a
+// /api/generate response actually used, not from the live (possibly since-changed) form.
+function labelFromData(d) {
+  if (d.top_period !== "week" || !d.week_start || !d.week_end) return "month";
+  const fmt = (s) => {
+    const [y, m, day] = s.split("-").map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+  return `week (${fmt(d.week_start)} – ${fmt(d.week_end)})`;
+}
+
 async function loadMonths() {
   const sel = $("month");
   sel.innerHTML = '<option value="">Loading months…</option>';
@@ -52,6 +78,15 @@ async function loadMonths() {
 }
 
 async function generate() {
+  const topPeriod = $("top-period").value;
+  if (topPeriod === "week" && (!$("week-start").value || !$("week-end").value)) {
+    setStatus("Pick a start and end date for the week.", true);
+    return;
+  }
+  if (topPeriod === "week" && $("week-end").value < $("week-start").value) {
+    setStatus("Week end date must be on or after the start date.", true);
+    return;
+  }
   const btn = $("generate");
   btn.disabled = true;
   setStatus("Pulling numbers and drafting copy… (this can take 10–20s)");
@@ -63,6 +98,9 @@ async function generate() {
         client: $("client").value,
         month: $("month").value,
         password: $("password").value || null,
+        top_period: topPeriod,
+        week_start: topPeriod === "week" ? $("week-start").value : null,
+        week_end: topPeriod === "week" ? $("week-end").value : null,
       }),
     });
     if (!r.ok) {
@@ -142,6 +180,10 @@ function getPickedItems(containerId) {
 function populate(d) {
   $("narrative").value = d.narrative;
 
+  const label = labelFromData(d);
+  $("top-ugc-label").firstChild.textContent = `Top UGC of the ${label} `;
+  $("giftees-label").firstChild.textContent = `Top Giftees of the ${label} `;
+
   // Numbers grid (all 6 metrics always shown in the grid)
   $("metrics").innerHTML = [
     ["Organic Outreach",   d.outreach.toLocaleString()],
@@ -206,9 +248,10 @@ function buildHtml() {
     h += `<li>Total Followership: ${d.followership.toLocaleString()}</li>`;
 
   // Top UGC — from the checklist selections
+  const label = labelFromData(d);
   const ugcPicked = getPickedItems("top-ugc-list");
   if (ugcPicked.length) {
-    h += `<li>Top UGC of the week:<ul>`;
+    h += `<li>Top UGC of the ${label}:<ul>`;
     ugcPicked.forEach(p => {
       h += p.url
         ? `<li><a href="${esc(p.url)}">@${esc(p.handle)}</a></li>`
@@ -220,7 +263,7 @@ function buildHtml() {
   // Top Giftees — from the checklist selections (links to Instagram)
   const giftPicked = getPickedItems("giftees-list");
   if (giftPicked.length) {
-    h += `<li>Top Giftees of the week:<ul>`;
+    h += `<li>Top Giftees of the ${label}:<ul>`;
     giftPicked.forEach(g => {
       const handle = g.handle.replace(/^@/, "");
       h += `<li><a href="https://www.instagram.com/${esc(handle)}/">@${esc(handle)}</a></li>`;

@@ -53,12 +53,21 @@ def get_gspread():
     return gspread.service_account(filename=config.GOOGLE_CREDENTIALS)
 
 
-def compute_numbers(client, year, month, token, gc):
-    """All the data for one client/month — shared by the CLI and the web app."""
+def compute_numbers(client, year, month, token, gc, top_period="month",
+                    week_start=None, week_end=None):
+    """All the data for one client/month — shared by the CLI and the web app.
+
+    top_period controls only the "Top UGC" / "Top Giftees" candidate lists:
+    "month" (default) scopes them to the selected month, "week" scopes them to
+    the [week_start, week_end] date range (both "YYYY-MM-DD", inclusive).
+    Every other metric (outreach, gifts count, UGC count, EMV, ...) always
+    stays scoped to the selected month.
+    """
     sh = gc.open_by_key(client["report_sheet_key"])
     forms = reporting_formulas(sh)
     outreach = count_outreach(sh, forms.get("outreach"), year, month, client)
-    gifts, top_giftees = gift_data(gc, client, sh, forms.get("form responses"), year, month)
+    gifts, top_giftees = gift_data(gc, client, sh, forms.get("form responses"),
+                                   lambda d: d.year == year and d.month == month)
 
     ws_id = client.get("archive_workspace")
     camp = find_monthly_ugc_campaign(ws_id, token, year, month) if ws_id else None
@@ -68,6 +77,15 @@ def compute_numbers(client, year, month, token, gc):
     else:
         stats = {"ugc_count": 0, "emv": 0, "impressions": 0, "followership": 0, "top_posts": []}
         campaign_name = campaign_id = None
+
+    if top_period == "week" and week_start and week_end:
+        start_dt = datetime.strptime(week_start, "%Y-%m-%d")
+        end_dt = datetime.strptime(week_end, "%Y-%m-%d")
+        _, top_giftees = gift_data(gc, client, sh, forms.get("form responses"),
+                                   lambda d: start_dt.date() <= d.date() <= end_dt.date())
+        stats["top_posts"] = top_posts_for_range(ws_id, token, start_dt, end_dt,
+                                                 config.TOP_POSTS) if ws_id else []
+
     return {"month": month, "outreach": outreach, "gifts": gifts,
             "top_giftees": top_giftees, "campaign_name": campaign_name,
             "campaign_id": campaign_id, **stats}
@@ -182,22 +200,44 @@ def ugc_campaign_months(workspace_id, token):
             for (y, m) in sorted(seen, reverse=True)]
 
 
-def campaign_stats(workspace_id, token, campaign_id, top_n):
-    """UGC count, EMV (dollars), impressions, total followership, and the top N posts by EMV."""
-    q = """
-    query($cid: ID!, $after: String) {
-      items(first: 100, after: $after,
-            filter: { campaignsIds: [$cid] },
-            sorting: { sortKey: EARNED_MEDIA_VALUE, sortOrder: DESC }) {
-        totalCount
-        pageInfo { hasNextPage endCursor }
-        nodes {
-          archivePublicUrl originalUrl
-          socialProfile { id accountName followers }
-          currentEngagement { earnedMediaValue impressions }
-        }
-      }
-    }"""
+def campaign_stats(workspace_id, token, campaign_id, top_n, taken_at=None):
+    """UGC count, EMV (dollars), impressions, total followership, and the top N posts by EMV.
+
+    taken_at, if given, is {"from": iso, "to": iso} (UTC, e.g. "2026-07-14T00:00:00Z")
+    and restricts to posts taken in that range.
+    """
+    if taken_at:
+        q = """
+        query($cid: ID!, $from: DateTime!, $to: DateTime!, $after: String) {
+          items(first: 100, after: $after,
+                filter: { campaignsIds: [$cid], takenAt: { from: $from, to: $to } },
+                sorting: { sortKey: EARNED_MEDIA_VALUE, sortOrder: DESC }) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              archivePublicUrl originalUrl
+              socialProfile { id accountName followers }
+              currentEngagement { earnedMediaValue impressions }
+            }
+          }
+        }"""
+        base_vars = {"cid": campaign_id, "from": taken_at["from"], "to": taken_at["to"]}
+    else:
+        q = """
+        query($cid: ID!, $after: String) {
+          items(first: 100, after: $after,
+                filter: { campaignsIds: [$cid] },
+                sorting: { sortKey: EARNED_MEDIA_VALUE, sortOrder: DESC }) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              archivePublicUrl originalUrl
+              socialProfile { id accountName followers }
+              currentEngagement { earnedMediaValue impressions }
+            }
+          }
+        }"""
+        base_vars = {"cid": campaign_id}
     total = 0
     emv_total = 0          # earnedMediaValue is already in dollars (verified vs Archive UI)
     impressions_total = 0
@@ -205,7 +245,7 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
     top = []
     after = None
     while True:
-        items = archive_query(q, {"cid": campaign_id, "after": after},
+        items = archive_query(q, {**base_vars, "after": after},
                               workspace_id, token)["items"]
         total = items["totalCount"]
         for n in items["nodes"]:
@@ -231,6 +271,29 @@ def campaign_stats(workspace_id, token, campaign_id, top_n):
             "impressions": impressions_total,
             "followership": sum(followers_by_profile.values()),
             "top_posts": top}
+
+
+def campaigns_overlapping(workspace_id, token, start_date, end_date):
+    """UGC campaign ids whose month overlaps [start_date, end_date] (date objects)."""
+    out = []
+    for (y, m, c) in _ugc_campaigns(workspace_id, token):
+        first = datetime(y, m, 1).date()
+        last = datetime(y, m, calendar.monthrange(y, m)[1]).date()
+        if first <= end_date and last >= start_date:
+            out.append(c["id"])
+    return out
+
+
+def top_posts_for_range(workspace_id, token, start_dt, end_dt, top_n):
+    """Top N UGC posts by EMV taken within [start_dt, end_dt] (inclusive, UTC)."""
+    cids = campaigns_overlapping(workspace_id, token, start_dt.date(), end_dt.date())
+    taken_at = {"from": start_dt.strftime("%Y-%m-%dT00:00:00Z"),
+                "to": end_dt.strftime("%Y-%m-%dT23:59:59Z")}
+    merged = []
+    for cid in cids:
+        merged.extend(campaign_stats(workspace_id, token, cid, top_n, taken_at=taken_at)["top_posts"])
+    merged.sort(key=lambda p: p["emv"], reverse=True)
+    return merged[:top_n]
 
 
 # ── Google Sheets (formula-driven) ──────────────────────────────────────────────
@@ -295,7 +358,7 @@ def count_outreach(sh, formula, year, month, client=None):
     return total
 
 
-def _collect_gifts(ws, date_idx, year, month, counter, giftees):
+def _collect_gifts(ws, date_idx, in_range, counter, giftees):
     rows = ws.get_values(value_render_option="UNFORMATTED_VALUE")
     if not rows:
         return
@@ -306,7 +369,7 @@ def _collect_gifts(ws, date_idx, year, month, counter, giftees):
         if date_idx >= len(r):
             continue
         d = to_date(r[date_idx])
-        if not (d and d.year == year and d.month == month):
+        if not (d and in_range(d)):
             continue
         counter[0] += 1
         if h_idx is not None and h_idx < len(r):
@@ -316,9 +379,10 @@ def _collect_gifts(ws, date_idx, year, month, counter, giftees):
                 giftees[handle] = max(giftees.get(handle, 0), fol)
 
 
-def gift_data(gc, client, sh, formula, year, month):
-    """(gift_count, top_3_giftee_handles). Gift tabs come from the 'Form Responses' formula,
-    unless the client's gifts live in a separate spreadsheet (giftapp_sheet_key)."""
+def gift_data(gc, client, sh, formula, in_range):
+    """(gift_count, top_3_giftee_handles) for rows whose date passes in_range(date).
+    Gift tabs come from the 'Form Responses' formula, unless the client's gifts
+    live in a separate spreadsheet (giftapp_sheet_key)."""
     counter = [0]
     giftees = {}
     if client.get("giftapp_sheet_key"):
@@ -328,13 +392,13 @@ def gift_data(gc, client, sh, formula, year, month):
         for ws in gsh.worksheets():
             t = ws.title.lower()
             if ("gift application" in t and "helper" not in t) or ws.title in extras:
-                _collect_gifts(ws, 0, year, month, counter, giftees)
+                _collect_gifts(ws, 0, in_range, counter, giftees)
     else:
         titles = {w.title: w for w in sh.worksheets()}
         for tab, col in _parse_refs(formula):
             ws = titles.get(tab)
             if ws:
-                _collect_gifts(ws, _col_idx(col), year, month, counter, giftees)
+                _collect_gifts(ws, _col_idx(col), in_range, counter, giftees)
     top = [{"handle": h, "followers": f}
            for h, f in sorted(giftees.items(), key=lambda kv: kv[1], reverse=True)[:10]]
     return counter[0], top
@@ -400,7 +464,7 @@ def generate_narrative(client_name, month_name, nums, key):
         return None
 
 
-def build_draft(client_name, month_name, year, nums, key=None):
+def build_draft(client_name, month_name, year, nums, key=None, top_label="week"):
     narrative = generate_narrative(client_name, month_name, nums, key)
     top_posts = nums.get("top_posts", [])
     top_ugc = f"@{top_posts[0]['handle']} — {top_posts[0]['url']}" if top_posts else "[fill in]"
@@ -422,8 +486,8 @@ def build_draft(client_name, month_name, year, nums, key=None):
     lines.append(f"  • {month_name} UGC: {nums['ugc_count']}")
     lines.append(f"  • {month_name} EMV: ${nums['emv']:,.0f}")
     lines.append("")
-    lines.append(f"Top UGC of the week: {top_ugc}")
-    lines.append(f"Top Giftees of the week: {giftees_str}")
+    lines.append(f"Top UGC of the {top_label}: {top_ugc}")
+    lines.append(f"Top Giftees of the {top_label}: {giftees_str}")
     lines.append("")
     lines.append("As always, let us know if you have any questions!")
     return "\n".join(lines)

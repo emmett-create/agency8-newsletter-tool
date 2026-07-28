@@ -31,6 +31,10 @@ select, input, textarea {
 select { min-width: 200px; }
 textarea { resize: vertical; }
 
+.week-range-inputs { display: flex; align-items: center; gap: 8px; }
+.week-range-inputs input[type=date] { width: auto; }
+.week-range-inputs span { color: var(--dim); font-size: 13px; }
+
 .btn-pri { background: var(--red); color: #fff; border: none; border-radius: 8px;
   padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn-pri:hover { filter: brightness(1.1); }

@@ -25,6 +25,21 @@
         <label>Month</label>
         <select id="month"><option value="">Select a client first…</option></select>
       </div>
+      <div class="fld">
+        <label>Top UGC / Giftees</label>
+        <select id="top-period">
+          <option value="month">Top content of the month</option>
+          <option value="week">Top content of a custom week</option>
+        </select>
+      </div>
+      <div class="fld week-range hidden" id="week-range-fld">
+        <label>Week range</label>
+        <div class="week-range-inputs">
+          <input type="date" id="week-start">
+          <span>to</span>
+          <input type="date" id="week-end">
+        </div>
+      </div>
       <div class="fld" id="pw-fld" style="display:none">
         <label>Password</label>
         <input type="password" id="password" placeholder="team password">
@@ -57,10 +72,10 @@
           </div>
         </div>
 
-        <label>Top UGC of the week <span class="hint">(check up to 3 to feature — click link to preview)</span></label>
+        <label id="top-ugc-label">Top UGC of the month <span class="hint">(check up to 3 to feature — click link to preview)</span></label>
         <div class="pick-list" id="top-ugc-list"></div>
 
-        <label>Top Giftees of the week <span class="hint">(check up to 3 to feature)</span></label>
+        <label id="giftees-label">Top Giftees of the month <span class="hint">(check up to 3 to feature)</span></label>
         <div class="pick-list" id="giftees-list"></div>
 
         <label>Highlights <span class="hint">(optional)</span></label>

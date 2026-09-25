@@ -254,7 +254,7 @@ function buildHtml() {
     h += `<li>Top UGC of the ${label}:<ul>`;
     ugcPicked.forEach(p => {
       h += p.url
-        ? `<li><a href="${esc(p.url)}">@${esc(p.handle)}</a></li>`
+        ? `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.handle)}</a></li>`
         : `<li>@${esc(p.handle)}</li>`;
     });
     h += `</ul></li>`;
@@ -266,7 +266,7 @@ function buildHtml() {
     h += `<li>Top Giftees of the ${label}:<ul>`;
     giftPicked.forEach(g => {
       const handle = g.handle.replace(/^@/, "");
-      h += `<li><a href="https://www.instagram.com/${esc(handle)}/">@${esc(handle)}</a></li>`;
+      h += `<li><a href="https://www.instagram.com/${esc(handle)}/" target="_blank" rel="noopener">@${esc(handle)}</a></li>`;
     });
     h += `</ul></li>`;
   }

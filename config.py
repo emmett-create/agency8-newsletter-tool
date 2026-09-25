@@ -90,14 +90,16 @@ CLIENTS = {
     # Stardust's spreadsheet has 4 different master-list tabs (Working/
     # Horoscope/Sorority/Tarot Mailer) — defaults to the main "Working" one.
     "stardust":       {"display_name": "Stardust",          "archive_workspace": "d7413c10-4ac9-4a69-b7a6-0e0babaad8a1", "report_sheet_key": "1Qz6ynzsQX-hf_0s5qxoq_jsztri1uhA25V-qO-c202k", "master_list_tab": "Master List (working)"},
+    # Sheet IDs from Emmett 2026-09-25 — both verified readable, plain
+    # "Master List" tab, no override needed (same shape as every other client).
+    "moonjuice":      {"display_name": "Moon Juice",        "archive_workspace": "dd891362-725f-4b08-b77b-d5a5b9801e4c", "report_sheet_key": "1UK--bNXSyWdtq-jlWAw8IikinOGof-stQ9N17RI-I40"},
+    "fenty":          {"display_name": "Fenty",             "archive_workspace": "fc5899da-04ea-4807-83f4-0687123d4549", "report_sheet_key": "1ttnrS6HKJr_iD6HNKSWi-HJUKuVD2554rXi9R1W0zos"},
 }
 
 # Found in Archive's current workspace list (2026-09-25) but with NO known
-# Google Sheet — clients.js doesn't have them either, and report_sheet_key
+# Google Sheet — clients.js doesn't have it either, and report_sheet_key
 # is required (newsletter.py crashes without one). Not added until a real
-# sheet ID is found for each:
+# sheet ID is found:
 #   Biossance    952bbf02-0d54-4704-b72a-f1c6e09fceb1
-#   Moon Juice   dd891362-725f-4b08-b77b-d5a5b9801e4c  (Paid-System-only client — may not have a traditional gifting/outreach sheet at all)
-#   Fenty        fc5899da-04ea-4807-83f4-0687123d4549
 # "Agency Eight" (c51ac2eb-5bd2-49bd-b8ff-0840041b04c4) is the agency's own
 # internal workspace, not a client — deliberately excluded.

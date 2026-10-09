@@ -468,8 +468,8 @@ def build_draft(client_name, month_name, year, nums, key=None, top_label="week")
     narrative = generate_narrative(client_name, month_name, nums, key)
     top_posts = nums.get("top_posts", [])
     top_ugc = f"@{top_posts[0]['handle']} — {top_posts[0]['url']}" if top_posts else "[fill in]"
-    giftees = nums.get("top_giftees", [])
-    giftees_str = ", ".join("@" + h for h in giftees) if giftees else "[fill in]"
+    giftees = nums.get("top_giftees", [])[:3]
+    giftees_str = ", ".join("@" + g["handle"] for g in giftees) if giftees else "[fill in]"
     lines = []
     if narrative:
         lines.append(narrative)

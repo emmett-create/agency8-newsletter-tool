@@ -95,7 +95,20 @@ CLIENTS = {
     # Sheet IDs from Emmett 2026-09-25 — both verified readable, plain
     # "Master List" tab, no override needed (same shape as every other client).
     "moonjuice":      {"display_name": "Moon Juice",        "archive_workspace": "dd891362-725f-4b08-b77b-d5a5b9801e4c", "report_sheet_key": "1UK--bNXSyWdtq-jlWAw8IikinOGof-stQ9N17RI-I40"},
-    "fenty":          {"display_name": "Fenty",             "archive_workspace": "fc5899da-04ea-4807-83f4-0687123d4549", "report_sheet_key": "1ttnrS6HKJr_iD6HNKSWi-HJUKuVD2554rXi9R1W0zos"},
+    # Amanda, Slack #fenty-internal 2026-10-23: wants a combined Sep/Oct option
+    # tied to the "A8 September/October UGC" Archive campaign (Sep 1 - Oct 31),
+    # not the regular single-month campaigns. Only Fenty has this — every other
+    # client just gets the normal one-campaign-per-month list.
+    "fenty":          {"display_name": "Fenty",             "archive_workspace": "fc5899da-04ea-4807-83f4-0687123d4549", "report_sheet_key": "1ttnrS6HKJr_iD6HNKSWi-HJUKuVD2554rXi9R1W0zos",
+                       "dual_month_campaigns": [
+                           {"value": "2026-09+2026-10", "label": "Sep/Oct 2026",
+                            "campaign_name": "A8 September/October UGC",
+                            "period_label": "September/October 2026",
+                            "months": [(2026, 9), (2026, 10)]},
+                       ],
+                       # Emmett, 2026-10-23: no standalone September campaign for Fenty
+                       # anymore — Sep/Oct and October are the only options that should show.
+                       "hidden_months": ["2026-09"]},
 }
 
 # Found in Archive's current workspace list (2026-09-25) but with NO known

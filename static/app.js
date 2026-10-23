@@ -41,6 +41,7 @@ $("top-period").addEventListener("change", () => {
 // Derives the "month" / "week (Jul 14 – Jul 20)" label from the data a
 // /api/generate response actually used, not from the live (possibly since-changed) form.
 function labelFromData(d) {
+  if (d.multi_month) return "two months";
   if (d.top_period !== "week" || !d.week_start || !d.week_end) return "month";
   const fmt = (s) => {
     const [y, m, day] = s.split("-").map(Number);
@@ -217,7 +218,7 @@ function populate(d) {
     })), 3);
 
   if (!d.campaign_name) {
-    setStatus("⚠ No monthly UGC campaign found for this month — UGC/EMV show 0.", true);
+    setStatus("⚠ No UGC campaign found for this period — UGC/EMV show 0.", true);
   }
   render();
 }

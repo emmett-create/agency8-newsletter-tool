@@ -91,6 +91,41 @@ def compute_numbers(client, year, month, token, gc, top_period="month",
             "campaign_id": campaign_id, **stats}
 
 
+def compute_numbers_multi(client, months, campaign_name, token, gc, top_period="month",
+                          week_start=None, week_end=None):
+    """Like compute_numbers, but for a combined multi-month option (e.g. Fenty's
+    Sep/Oct 2026): outreach/gifts/giftees are summed across every (year, month)
+    in `months`, and the UGC campaign is looked up by its exact name instead of
+    the single-month name pattern find_monthly_ugc_campaign() relies on.
+    Built for Amanda's request, Slack #fenty-internal 2026-10-23."""
+    sh = gc.open_by_key(client["report_sheet_key"])
+    forms = reporting_formulas(sh)
+    outreach = sum(count_outreach(sh, forms.get("outreach"), y, m, client) for (y, m) in months)
+    month_set = set(months)
+    gifts, top_giftees = gift_data(gc, client, sh, forms.get("form responses"),
+                                   lambda d: (d.year, d.month) in month_set)
+
+    ws_id = client.get("archive_workspace")
+    camp = find_named_ugc_campaign(ws_id, token, campaign_name) if ws_id else None
+    if camp:
+        stats = campaign_stats(ws_id, token, camp["id"], config.TOP_POSTS)
+        campaign_id = camp["id"]
+    else:
+        stats = {"ugc_count": 0, "emv": 0, "impressions": 0, "followership": 0, "top_posts": []}
+        campaign_id = None
+
+    if top_period == "week" and week_start and week_end:
+        start_dt = datetime.strptime(week_start, "%Y-%m-%d")
+        end_dt = datetime.strptime(week_end, "%Y-%m-%d")
+        _, top_giftees = gift_data(gc, client, sh, forms.get("form responses"),
+                                   lambda d: start_dt.date() <= d.date() <= end_dt.date())
+        stats["top_posts"] = top_posts_for_range(ws_id, token, start_dt, end_dt,
+                                                 config.TOP_POSTS) if ws_id else []
+
+    return {"outreach": outreach, "gifts": gifts, "top_giftees": top_giftees,
+            "campaign_name": campaign_name, "campaign_id": campaign_id, **stats}
+
+
 # ── dates ───────────────────────────────────────────────────────────────────────
 def parse_date(s):
     s = str(s).strip()
@@ -185,6 +220,19 @@ def find_monthly_ugc_campaign(workspace_id, token, year, month):
     """The 'A8 <Month> UGC' campaign for the given month (month read from the name)."""
     for (y, m, c) in _ugc_campaigns(workspace_id, token):
         if y == year and m == month:
+            return c
+    return None
+
+
+def find_named_ugc_campaign(workspace_id, token, name):
+    """Exact-name (case-insensitive) campaign lookup — for combined multi-month
+    campaigns like Fenty's "A8 September/October UGC", whose name doesn't fit
+    the single 'A8 <Month> UGC' pattern _campaign_month() parses."""
+    q = "query { campaigns(first: 100) { nodes { id name } } }"
+    nodes = archive_query(q, {}, workspace_id, token)["campaigns"]["nodes"]
+    target = name.strip().lower()
+    for c in nodes:
+        if c["name"].strip().lower() == target:
             return c
     return None
 
@@ -438,14 +486,27 @@ Output ONLY the greeting + intro sentences as plain text, no headings, no metric
 Never use em dashes or en dashes (the "—" or "–" characters) anywhere; use commas, periods, or "and" instead."""
 
 
-def generate_narrative(client_name, month_name, nums, key):
-    """Have Claude write the intro in Agency 8's voice. Falls back to a template on any error."""
+def generate_narrative(client_name, month_name, nums, key, multi_month=False):
+    """Have Claude write the intro in Agency 8's voice. Falls back to a template on any error.
+
+    multi_month=True (Fenty's combined Sep/Oct 2026 option, Amanda, 2026-10-23):
+    this update covers two months combined, not one — steer Claude away from
+    "this month" framing instead of relying on month_name alone to imply it."""
     if not key:
         return None
-    context = (f"Client: {client_name}. Month: {month_name}. "
-               f"For context only (do not cite these exact figures): outreach and gifting "
-               f"are active this month and UGC continues to come in. "
-               f"Write this week's greeting + intro.")
+    if multi_month:
+        context = (f"Client: {client_name}. Reporting period: {month_name} (a combined "
+                   f"TWO-MONTH period, not a single month). "
+                   f"For context only (do not cite these exact figures): outreach and gifting "
+                   f"are active across these two months and UGC continues to come in. "
+                   f"Write this week's greeting + intro. Never say 'this month' or imply a "
+                   f"single month anywhere — use phrasing like 'these two months' or "
+                   f"'this stretch' instead.")
+    else:
+        context = (f"Client: {client_name}. Month: {month_name}. "
+                   f"For context only (do not cite these exact figures): outreach and gifting "
+                   f"are active this month and UGC continues to come in. "
+                   f"Write this week's greeting + intro.")
     try:
         r = requests.post(
             "https://api.anthropic.com/v1/messages",

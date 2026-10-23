@@ -62,9 +62,18 @@ def months(req: ClientRequest):
     client_cfg = config.CLIENTS[req.client]
     ws_id = client_cfg.get("archive_workspace")
     if not ws_id:
-        return {"months": nl.recent_months(12)}   # no Archive → offer recent months
-    token = client_cfg.get("archive_token") or nl.archive_token()
-    return {"months": nl.ugc_campaign_months(ws_id, token)}
+        months = nl.recent_months(12)   # no Archive → offer recent months
+    else:
+        token = client_cfg.get("archive_token") or nl.archive_token()
+        months = nl.ugc_campaign_months(ws_id, token)
+
+    # Client-specific combined-period options (e.g. Fenty's Sep/Oct 2026) go
+    # first, ahead of the normal one-campaign-per-month list.
+    dual = client_cfg.get("dual_month_campaigns", [])
+    if dual:
+        months = [{"value": o["value"], "label": o["label"], "campaign": o["campaign_name"]}
+                  for o in dual] + months
+    return {"months": months}
 
 
 @app.post("/api/generate")
@@ -74,12 +83,6 @@ def generate(req: GenerateRequest):
         raise HTTPException(status_code=404, detail="Unknown client.")
     client = config.CLIENTS[req.client]
 
-    if req.month:
-        year, month = map(int, req.month.split("-"))
-    else:
-        now = datetime.utcnow()
-        year, month = now.year, now.month
-
     if req.top_period == "week":
         if not (req.week_start and req.week_end):
             raise HTTPException(status_code=400, detail="Pick a start and end date for the week.")
@@ -88,17 +91,38 @@ def generate(req: GenerateRequest):
 
     token = client.get("archive_token") or nl.archive_token()
     gc = nl.get_gspread()
-    nums = nl.compute_numbers(client, year, month, token, gc,
-                              top_period=req.top_period,
-                              week_start=req.week_start, week_end=req.week_end)
-    narrative = nl.generate_narrative(client["display_name"], calendar.month_name[month],
-                                      nums, nl._env("ANTHROPIC_API_KEY"))
+
+    # Client-specific combined-period option (e.g. Fenty's Sep/Oct 2026) —
+    # value won't parse as a plain "YYYY-MM" month, matched against config instead.
+    dual = next((o for o in client.get("dual_month_campaigns", []) if o["value"] == req.month), None)
+
+    if dual:
+        nums = nl.compute_numbers_multi(client, dual["months"], dual["campaign_name"], token, gc,
+                                        top_period=req.top_period,
+                                        week_start=req.week_start, week_end=req.week_end)
+        period_label = dual["period_label"]
+        narrative = nl.generate_narrative(client["display_name"], period_label, nums,
+                                          nl._env("ANTHROPIC_API_KEY"), multi_month=True)
+        multi_month = True
+    else:
+        if req.month:
+            year, month = map(int, req.month.split("-"))
+        else:
+            now = datetime.utcnow()
+            year, month = now.year, now.month
+        nums = nl.compute_numbers(client, year, month, token, gc,
+                                  top_period=req.top_period,
+                                  week_start=req.week_start, week_end=req.week_end)
+        period_label = calendar.month_name[month]
+        narrative = nl.generate_narrative(client["display_name"], period_label,
+                                          nums, nl._env("ANTHROPIC_API_KEY"))
+        multi_month = False
 
     cid = nums.get("campaign_id")
     return {
         "client": client["display_name"],
-        "month_name": calendar.month_name[month],
-        "year": year,
+        "month_name": period_label,
+        "multi_month": multi_month,
         "campaign_name": nums["campaign_name"],
         "campaign_url": f"https://app.archive.com/crm/p/c/{cid}" if cid else "",
         "outreach": nums["outreach"],

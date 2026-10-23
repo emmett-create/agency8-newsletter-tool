@@ -67,6 +67,12 @@ def months(req: ClientRequest):
         token = client_cfg.get("archive_token") or nl.archive_token()
         months = nl.ugc_campaign_months(ws_id, token)
 
+    # Client-specific months to drop from the normal list (e.g. Fenty's old
+    # standalone September, superseded by the Sep/Oct combined option below).
+    hidden = set(client_cfg.get("hidden_months", []))
+    if hidden:
+        months = [m for m in months if m["value"] not in hidden]
+
     # Client-specific combined-period options (e.g. Fenty's Sep/Oct 2026) go
     # first, ahead of the normal one-campaign-per-month list.
     dual = client_cfg.get("dual_month_campaigns", [])
